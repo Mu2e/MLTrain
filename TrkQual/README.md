@@ -28,19 +28,19 @@ Each of these will be done in a different environment.
 ### General Setup
 You will need to create your own fork of the repository:
 
-* go to www.github.com/AndrewEdmonds11/TrkQual and click "fork"
+* go to www.github.com/Mu2e/MLTrain and click "fork"
 * then in your terminal:
 ```
 cd /path/to/your/work/area/
 
 # only need to do this once
-git clone https://www.github.com/YourGitHubUsername/TrkQual.git
-cd TrkQual/
-git remote add -f andy https://www.github.com/AndrewEdmonds11/TrkQual.git
+git clone https://www.github.com/YourGitHubUsername/MLTrain.git
+cd MLTrain/
+git remote add -f mu2e https://www.github.com/Mu2e/TrkQual.git
 
 # do these whenever you are doing new development
-git fetch andy main # get the latest and greatest
-git checkout --no-track -b your-new-branchname andy/main
+git fetch mu2e main # get the latest and greatest
+git checkout --no-track -b your-new-branchname mu2e/main
 ```
 
 ### Training a Model
@@ -56,6 +56,7 @@ pyenv rootana 2.0.0
 You can start a jupyter notebook like so:
 
 ```
+cd MLTrain/TrkQual
 jupyter-notebook --no-browser --port=XXXX # XXXX is the same port that you forwarded when you ssh'd in
 ```
 
@@ -85,7 +86,7 @@ ssh username@mu2egpvmYY.fnal.gov
 cd /path/to/your/work/area/
 mu2einit
 muse setup EventNtuple
-cd TrkQual/
+cd MLTrain/TrkQual/
 ```
 
 You can then generate the inference code like so:
