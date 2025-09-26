@@ -4,8 +4,9 @@
 The TrkQual algorithm is trained to classify tracks as either "high quality" or "low quality". At the moment, the model implemented in Offline is an Artificial Neural Network (see [here](https://github.com/Mu2e/Offline/blob/main/TrkDiag/src/TrackQuality_module.cc))
 
 This README covers:
-* where an analyzer can find things they might like to know (e.g. the definition of high quality and low quality), and
-* instructions for those interested in retraining or improving on the model
+* where an analyzer can find things they might like to know (e.g. the definition of high quality and low quality),
+* instructions for those interested in retraining or improving on the model, and
+* a table of commits for each training version
 
 ## For the Interested Analyzer
 The [jupyter notebook](TrkQualTrain.ipynb) contains lots of information close to the top of the file includings:
@@ -115,3 +116,11 @@ and make sure that the new model is implemented correctly the TrackQuality modul
 If you trained a different model, then you are entering new territory and should discuss with experts how best to implement. Either:
 * we make the ```TrackQuality``` module model agnostic, or
 * we write separate ```TrackQuality``` modules for different models...
+
+## Version History
+
+| Model | Version | Commit |
+|-------|---------|--------|
+| ANN1 | v2 | `034f7c3` |
+| ANN1 | v1.1 |`fd008e6` (previous repo) |
+| ANN1 | v1 | `3d8a9b8` (previous repo) |
