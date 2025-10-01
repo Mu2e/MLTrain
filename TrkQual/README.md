@@ -90,19 +90,25 @@ muse setup EventNtuple
 cd MLTrain/TrkQual/
 ```
 
-You can then generate the inference code like so:
+You can then generate the inference code using TMVA::SOFIE like so:
 
 ```
 root -l -b scripts/CreateInference.C\(\"TrkQual_ANN1_v2\"\)
 ```
 
-If you did not change the model, then you (should) just need to copy the .dat file to Offline (from experience this isn't always the case)
+If you did not change the model, then you should just need to copy the .dat file to Offline. However, we have found that TMVA::SOFIE sometimes changes the node names and so a new .hxx file is made with a new .dat file. If the structure of the ANN truly hasn't changed then, instead of copying the new .hxx file, you can convert the .dat file from the new format to the old format like so:
 
 ```
-cp code/TrkQual_ANN1_v2.dat ../Offline/TrkDiag/data/
+python3 scripts/sortdat.py code/TrkQual_ANN1_v2.dat code_TrkQual_ANN1_v2.dat_conv
 ```
 
-and make sure that the new .dat file is used in the TrackQuality module.
+You can then copy the converted file to Offline like so:
+
+```
+cp code/TrkQual_ANN1_v2.dat_conv ../Offline/TrkDiag/data/TrkQual_ANN1_v2.dat
+```
+
+and make sure that the new .dat file is used in the TrackQuality module. (For example, change EventNtuple/fcl/prolog.fcl)
 
 If you modified the ANN model, then you need to copy both the .hxx and .dat file
 
