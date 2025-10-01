@@ -102,6 +102,8 @@ If you did not change the model, then you should just need to copy the .dat file
 python3 scripts/sortdat.py code/TrkQual_ANN1_v2.dat code_TrkQual_ANN1_v2.dat_conv
 ```
 
+(Note: you may need to change the new node names in the ```name_dict``` dictionary. The left-hand strings are the new names, and the right-hand strings are the names we want to convert to)
+
 You can then copy the converted file to Offline like so:
 
 ```
