@@ -99,7 +99,7 @@ root -l -b scripts/CreateInference.C\(\"TrkQual_ANN1_v2\"\)
 If you did not change the model, then you should just need to copy the .dat file to Offline. However, we have found that TMVA::SOFIE sometimes changes the node names and so a new .hxx file is made with a new .dat file. If the structure of the ANN truly hasn't changed then, instead of copying the new .hxx file, you can convert the .dat file from the new format to the old format like so:
 
 ```
-python3 scripts/sortdat.py code/TrkQual_ANN1_v2.dat code_TrkQual_ANN1_v2.dat_conv
+python3 scripts/sortdat.py code/TrkQual_ANN1_v2.dat code/TrkQual_ANN1_v2.dat_conv
 ```
 
 (Note: you may need to change the new node names in the ```name_dict``` dictionary. The left-hand strings are the new names, and the right-hand strings are the names we want to convert to)
