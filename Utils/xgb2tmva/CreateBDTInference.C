@@ -25,7 +25,7 @@
 // Note: baseScore defaults to 0.0 because XGBoost >= 2.0 bakes the base_score
 // into the tree leaf values. Try using 0.5 for models trained with XGBoost < 2.0.
 void CreateBDTInference(const char* txtpath, int nClasses = 2, 
-    bool logistic = true, float baseScore = 0.0) {
+    bool logistic = false, float baseScore = 0.0) {
 
     // Derive output name from input path: strip directory and .txt extension
     std::string outname = std::string(txtpath);
