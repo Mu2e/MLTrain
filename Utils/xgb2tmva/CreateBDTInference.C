@@ -16,16 +16,19 @@
 #include "TMVA/RBDT.hxx"
 #include "TFile.h"
 
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <regex>
 #include <string>
 #include <vector>
 
-// Note: baseScore defaults to 0.0 because XGBoost >= 2.0 bakes the base_score
-// into the tree leaf values. Try using 0.5 for models trained with XGBoost < 2.0.
-void CreateBDTInference(const char* txtpath, int nClasses = 2, 
-    bool logistic = false, float baseScore = 0.0) {
+// baseScore: XGBoost's base_score as a probability (from GenerateTestData.py).
+// RBDT expects an additive offset in log-odds space, so we convert via logit().
+// Default 0.5 → logit(0.5) = 0.0 (no offset), which is correct when the
+// base_score is already baked into the leaf values (XGBoost >= 2.0).
+void CreateBDTInference(const char* txtpath, int nClasses = 2,
+    bool logistic = true, float baseScore = 0.5) {
 
     // Derive output name from input path: strip directory and .txt extension
     std::string outname = std::string(txtpath);
@@ -59,9 +62,13 @@ void CreateBDTInference(const char* txtpath, int nClasses = 2,
         features.push_back("f" + std::to_string(i));
     }
 
+    // Convert baseScore from probability to log-odds for RBDT
+    float baseScoreLogOdds = std::log(baseScore / (1.0f - baseScore));
     std::cout << "Loading XGBoost text dump from: " << txtpath << std::endl;
+    std::cout << "baseScore (probability): " << baseScore
+              << " -> log-odds: " << baseScoreLogOdds << std::endl;
     auto bdt = TMVA::Experimental::RBDT::LoadText(
-        std::string(txtpath), features, nClasses, logistic, baseScore
+        std::string(txtpath), features, nClasses, logistic, baseScoreLogOdds
     );
 
     std::string rootfile = std::string(outname) + ".root";
