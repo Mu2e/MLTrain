@@ -81,4 +81,7 @@ void CreateBDTInference(const char* txtpath, int nClasses = 2,
     std::cout << "  TMVA::Experimental::RBDT bdt(\"" << outname << "\", \"" << rootfile << "\");" << std::endl;
     std::cout << "  std::vector<float> input = { f0, f1, ..., f" << nFeatures - 1 << " }; // " << nFeatures << " features in training order" << std::endl;
     std::cout << "  auto output = bdt.Compute(input);  // output[0] is the classifier score" << std::endl;
+    std::cout << "\nTo validate against XGBoost predictions:" << std::endl;
+    std::cout << "  python GenerateTestData.py model.pkl test_data.csv" << std::endl;
+    std::cout << "  root -l -b 'TestBDTInference.C(\"" << rootfile << "\", \"test_data.csv\")'" << std::endl;
 }
