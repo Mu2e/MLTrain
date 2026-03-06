@@ -17,6 +17,7 @@ This produces:
 """
 
 import argparse
+import json
 import os
 import joblib
 import xgboost as xgb
@@ -49,9 +50,15 @@ def xgb2tmva(input_pkl, output_name):
     if feature_names:
         print(f"Feature names: {feature_names}")
     print(f"Number of features: {booster.num_features()}")
+
+    # Extract base_score
+    config = json.loads(booster.save_config())
+    base_score = float(config["learner"]["learner_model_param"]["base_score"])
+    print(f"Model base_score: {base_score}")
+
     # Print instructions
     print(f"\nTo save as an RBDT ROOT file, run:")
-    print(f'  root -l -b \'CreateBDTInference.C("{txt_path}")\'')
+    print(f'  root -l -b \'CreateBDTInference.C("{txt_path}", 2, true, {base_score})\'')
 
 if __name__ == "__main__":
     # Get arguments
