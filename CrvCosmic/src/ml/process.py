@@ -62,7 +62,7 @@ class MLProcessor(Skeleton):
         groups_to_toggle = None,
         use_remote = True,
         location = "disk",
-        max_workers = 75,
+        max_workers = None,
         use_processes = True,
         verbosity = 1,
         worker_verbosity = 0
@@ -83,7 +83,7 @@ class MLProcessor(Skeleton):
             groups_to_toggle (dict, opt): Cut groups to enable/disable. Defaults to None.
             use_remote (bool, opt): Use remote file access. Defaults to True.
             location (str, opt): File location ("disk", etc.). Defaults to "disk".
-            max_workers (int, opt): Number of parallel workers. Defaults to 50.
+            max_workers (int, opt): Number of parallel workers. None lets pyprocess auto-scale to os.cpu_count().
             use_processes (bool, opt): Use processes rather than threads. Defaults to True.
             verbosity (int, opt): Logging verbosity level. Defaults to 2 (max).
             worker_verbosity (int, opt): Verbosity for worker processes (debug only!). Defaults to 0.

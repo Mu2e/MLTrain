@@ -13,8 +13,8 @@ sys.path.extend(["../src/utils", "../src/ml"])
 from process import MLProcessor
 from io_manager import Write
 
-def run(defname=None, file_name=None, feature_set="crv", 
-    tag="test", run_str="test", max_workers=48, cuts_to_toggle=None):
+def run(defname=None, file_name=None, feature_set="crv",
+    tag="test", run_str="test", max_workers=None, cuts_to_toggle=None):
 
     # Output directory
     out_path = Path(f"../output/ml/{run_str}/data/{tag}")
