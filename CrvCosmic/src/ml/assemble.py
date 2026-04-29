@@ -34,7 +34,7 @@ from pyutils.pyplot import Plot
 
 class AssembleDataset():
     """Load, label, and split CRY/CE mix data for ML training."""
-    def __init__(self, run="j", cutset_name="dev", verbosity=1):
+    def __init__(self, run="k", cutset_name="MLPreprocess", verbosity=1):
         self.run = run
         self.cutset_name = cutset_name
         self.base_in_path = REPO_ROOT / f"output/ml/{self.run}/data/"
