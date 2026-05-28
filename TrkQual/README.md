@@ -46,14 +46,14 @@ For training, you need to ssh into a mu2egpvm machine with a port forwarded, and
 ssh -L XXXX:localhost:XXXX username@mu2egpvmYY.fnal.gov # XXXX is any port number, and YY is the gpvm number
 cd /path/to/your/work/area/
 mu2einit
-pyenv
+pyenv ana
 ```
 
 You can start a jupyter notebook like so:
 
 ```
 cd MLTrain/TrkQual
-jupyter-notebook --no-browser --port=XXXX # XXXX is the same port that you forwarded when you ssh'd in
+jupyter lab --no-browser --port=XXXX # XXXX is the same port that you forwarded when you ssh'd in
 ```
 
 and copy and paste the URL to your browser to open it.
