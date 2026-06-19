@@ -231,8 +231,8 @@ def plot_feature(dataset_e, dataset_mu, feature, figdir, scale = 'linear', tag =
     max_x = max(max(dataset_e[feature]), max(dataset_mu[feature]))
 
     fig,ax = plt.subplots(1,1)
-    ax.hist(dataset_e[feature], color='b', alpha=0.5, range=(min_x,max_x), bins=100, density=False)
-    ax.hist(dataset_mu[feature], color='r', alpha=0.5, range=(min_x,max_x), bins=100, density=False)
+    ax.hist(dataset_e[feature], color='b', alpha=0.5, range=(min_x,max_x), bins=100, density=True)
+    ax.hist(dataset_mu[feature], color='r', alpha=0.5, range=(min_x,max_x), bins=100, density=True)
 
     ax.set_xlabel(feature)
     ax.set_xlim(min_x-0.05*(max_x-min_x), max_x+0.05*(max_x-min_x))
@@ -325,7 +325,7 @@ def make_arguments():
     parser.add_argument("--skip-import", "-I", action='store_true', help="Skip importing of data into csv file")
     parser.add_argument("--skip-train", "-T", action='store_true', help="Skip training of the model")
     parser.add_argument("--skip-export", "-E", action='store_true', help="Skip exporting the model to Onnx")
-    parser.add_argument("--n-train", "-n", type=int, default=50000, help="Number of events to use in training (min with fraction)")
+    parser.add_argument("--n-train", "-n", type=int, default=70000, help="Number of events to use in training (min with fraction)")
     parser.add_argument("--frac-train", "-f", type=float, default=0.7, help="Fraction of events to use in training (min with N(train))")
     parser.add_argument("--skip-plot", "-P", action='store_true', help="Skip plotting of results")
     args = parser.parse_args()
