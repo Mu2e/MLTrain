@@ -12,10 +12,10 @@ def perform_tz_fit(hits):
     popt, pconv = curve_fit(linear_model, z, t, sigma=e, absolute_sigma=True)
     slope, intercept = popt
     uncertainty = np.sqrt(pconv[0, 0]) # from the variance
-    residuals = linear_model(z, slope, uncertainty) - t
+    residuals = linear_model(z, slope, intercept) - t
     chi_sq = np.sum((residuals / e)**2)
     dof = len(z) - len(popt)
-    return slope, chi_sq/dof
+    return slope, uncertainty, chi_sq/dof
 
 def skim_tree_chain(file_list_path, input_tree_name, output_file_path, max_files):
     # input file list
@@ -60,8 +60,10 @@ def skim_tree_chain(file_list_path, input_tree_name, output_file_path, max_files
 
     # Add a new branch for dt/dz slope
     dtdz_vec  = ROOT.std.vector('float')()
+    unc_vec  = ROOT.std.vector('float')()
     chisq_vec = ROOT.std.vector('float')()
     new_tree.Branch("trkdtdz_slope", dtdz_vec)
+    new_tree.Branch("trkdtdz_unc"  , unc_vec)
     new_tree.Branch("trkdtdz_chisq", chisq_vec)
 
     # Loop over the events and clone the input, adding the tracker hit slope
@@ -71,6 +73,7 @@ def skim_tree_chain(file_list_path, input_tree_name, output_file_path, max_files
 
         # Clear last event's data
         dtdz_vec.clear()
+        unc_vec.clear()
         chisq_vec.clear()
 
         # Retrieve the tracks
@@ -83,8 +86,9 @@ def skim_tree_chain(file_list_path, input_tree_name, output_file_path, max_files
             track = tracks[itrk]
             hits  = trkhits[itrk]
             hit_vals = [[hit.etime[hit.earlyend] - hit.tottdrift, hit.poca.z(), 5.] for hit in hits ]
-            dtdz, chisq = perform_tz_fit(hit_vals)
+            dtdz, unc, chisq = perform_tz_fit(hit_vals)
             dtdz_vec.push_back(dtdz)
+            unc_vec.push_back(unc)
             chisq_vec.push_back(chisq)
 
         # Add the data to the output tree
