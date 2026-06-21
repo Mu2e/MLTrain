@@ -119,7 +119,7 @@ def make_dataset(particle, dataset_name, csv_name):
     df_array.to_csv(csv_name, index=True)
 
 
-def train_model(dataframe, export_onnx):
+def train_model(dataframe):
     # Reduce variable precision for training speed
     tf.keras.mixed_precision.set_global_policy('mixed_float16')
 
@@ -147,15 +147,6 @@ def train_model(dataframe, export_onnx):
     PID_model.save("PID_model.keras")
     with open("train_history.json",'w') as history_file:
         json.dump(train_history, history_file)
-
-    # export model in onnx format to be able to use it with SOFIE inference code ; manually enter name and shape of input and output for SOFIE
-    PID_model.output_names = ['output']
-    if export_onnx:
-        import tf2onnx
-        import onnx
-        onnx_signature = [tf.TensorSpec(input.shape, dtype=input.dtype, name=input.name) for input in PID_model.inputs]
-        onnx_model, _ = tf2onnx.convert.from_keras(PID_model, input_signature=onnx_signature)
-        onnx.save(onnx_model, "TrackPID.onnx")
 
     return PID_model
 
@@ -380,12 +371,23 @@ if __name__ == "__main__":
     print(f'>>> Performing training with {max_train} from the input {n_sig+n_bkg} events')
 
     if not args.skip_train:
-        PID_model = train_model(df_train, not args.skip_export)
+        PID_model = train_model(df_train)
     else:   # Use an already trained model saved in keras format
         PID_model = tf.keras.models.load_model("PID_model.keras")
         with open("train_history.json",'r') as history_file:    # open file containing the training history to plot later
             train_history = json.load(history_file)
         n_epochs = len(train_history['loss'])
+
+    # export model in onnx format to be able to use it with SOFIE inference code ; manually enter name and shape of input and output for SOFIE
+    PID_model.output_names = ['output']
+    if not args.skip_export:
+        print('>>> Loading ONXX packages')
+        import tf2onnx
+        import onnx
+        print('>>> Exporting to ONXX')
+        onnx_signature = [tf.TensorSpec(input.shape, dtype=input.dtype, name=input.name) for input in PID_model.inputs]
+        onnx_model, _ = tf2onnx.convert.from_keras(PID_model, input_signature=onnx_signature)
+        onnx.save(onnx_model, "TrackPID.onnx")
 
     df_train,results_train,confusion_matrix_train = make_results(PID_model, df_train, "train", 0.5)
     df_test ,results_test ,confusion_matrix_test  = make_results(PID_model, df_test , "test" , 0.5)
