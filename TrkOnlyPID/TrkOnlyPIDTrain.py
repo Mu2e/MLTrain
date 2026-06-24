@@ -134,7 +134,7 @@ def train_model(dataframe):
     train_history = PID_model.fit(dataframe[features], dataframe['label'], epochs = n_epochs, validation_split=0.2, callbacks=[early_stop])
     train_history = train_history.history   # extract the training history (loss as function of epochs)
     # Save model and training history
-    PID_model.save("PID_model.keras")
+    PID_model.save("TrkOnlyPID_model.keras")
     with open("train_history.json",'w') as history_file:
         json.dump(train_history, history_file)
 
@@ -186,6 +186,19 @@ def plot_dataset(csv_name, particle, figdir):
     ax.set_xlabel("reco mom [MeV]")
     ax.set_title("Reconstructed momentum of "+particle)
     fig.savefig(f'{figdir}mom.png')
+
+def plot_model(model, figdir):
+    tf.keras.utils.plot_model(model,
+                              to_file=f'{figdir}model.png',
+                              show_shapes=True,
+                              show_dtype=False,
+                              show_layer_names=True,
+                              rankdir='TB',
+                              expand_nested=True,
+                              dpi=96
+                              )
+    # text-based summary
+    model.summary()
 
 
 def plot_feature(dataset_e, dataset_mu, feature, figdir, scale = 'linear', tag = ''):
@@ -244,6 +257,7 @@ def plot_ROC(dataset, figdir):
     ax.set_xlabel("Signal efficiency (true positive rate)")
     ax.set_ylabel("Background rejection (true negative rate)")
     ax.set_title("ROC curve")
+    fig.savefig(f'{figdir}roc.png')
 
     fig,ax = plt.subplots(1,1)
     ax.plot(list_threshold, TPR, '-k')
@@ -258,7 +272,7 @@ def plot_ROC(dataset, figdir):
     ax2.set_ylabel("Significance")
     ax.legend(["Signal efficiency", "Background rejection", "Signal purity"], loc="lower left")
     ax2.legend(["Significance = S/sqrt(S+B)"], loc="lower right")
-    fig.savefig(f'{figdir}roc.png')
+    fig.savefig(f'{figdir}eff.png')
 
     return dataset
 
@@ -341,7 +355,7 @@ if __name__ == "__main__":
     if not args.skip_train:
         PID_model = train_model(df_train)
     else:   # Use an already trained model saved in keras format
-        PID_model = tf.keras.models.load_model("PID_model.keras")
+        PID_model = tf.keras.models.load_model("TrkOnlyPID_model.keras")
         with open("train_history.json",'r') as history_file:    # open file containing the training history to plot later
             train_history = json.load(history_file)
         n_epochs = len(train_history['loss'])
@@ -355,7 +369,7 @@ if __name__ == "__main__":
         print('>>> Exporting to ONXX')
         onnx_signature = [tf.TensorSpec(input.shape, dtype=input.dtype, name=input.name) for input in PID_model.inputs]
         onnx_model, _ = tf2onnx.convert.from_keras(PID_model, input_signature=onnx_signature)
-        onnx.save(onnx_model, "TrackPID.onnx")
+        onnx.save(onnx_model, "TrkOnlyPID.onnx")
 
     df_train,results_train,confusion_matrix_train = make_results(PID_model, df_train, "train", 0.5)
     df_test ,results_test ,confusion_matrix_test  = make_results(PID_model, df_test , "test" , 0.5)
@@ -376,3 +390,4 @@ if __name__ == "__main__":
         plot_feature(df_test_e , df_test_mu , "prediction", figdir, 'log')
         df_test = plot_ROC(df_test, figdir)
         plot_history("train_history.json", results_test, figdir)
+        plot_model(PID_model, figdir)

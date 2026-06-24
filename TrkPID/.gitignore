@@ -1,0 +1,6 @@
+*.keras
+*.csv
+*.root
+*.onnx
+*.json
+figures
