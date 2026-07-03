@@ -8,7 +8,7 @@ TrkPID is a machine learning algorithm is trained to differentiate between elect
 
 ### Dataset creation
 EventNtuple data files are used as input to the training.
-The ntuples are skimmed using [make_inputs.py](make_inputs.py) which drops unnessary data as well as adds branches if any are needed.
+The ntuples are skimmed using [make_inputs.py](make_inputs.py) which drops unnessary data as well as adds branches if any are needed (may require setting up an Analysis musing for EventNtuple libraries)
 
 ### Model training
 The python code provided in the file [TrackPIDTrain.py](TrkPIDTrain.py) is used to:
@@ -41,4 +41,6 @@ The input features are:
 * E(cluster)/P(track)
 * t(track) - t(cluster)
 * p(chi^2) of the track
-* tracker hit dt/dz slope divided by the expected slope from the track fit assuming an electron mass
+* straw hit time vs track time at the hit slope
+
+[compare_hit_slopes.py](compare_hit_slopes.py) compares different methods of using the straw hit time vs. track hit time prediction.

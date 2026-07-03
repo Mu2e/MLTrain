@@ -17,6 +17,7 @@ def perform_tz_fit(hits):
     dof = len(z) - len(popt)
     return slope, uncertainty, chi_sq/dof
 
+
 def skim_tree_chain(file_list_path, input_tree_name, output_file_path, max_files):
     # input file list
     chain = ROOT.TChain(input_tree_name)
@@ -62,9 +63,15 @@ def skim_tree_chain(file_list_path, input_tree_name, output_file_path, max_files
     dtdz_vec  = ROOT.std.vector('float')()
     unc_vec  = ROOT.std.vector('float')()
     chisq_vec = ROOT.std.vector('float')()
+    dtdt_vec  = ROOT.std.vector('float')()
+    unc_t_vec  = ROOT.std.vector('float')()
+    chisq_t_vec = ROOT.std.vector('float')()
     new_tree.Branch("trkdtdz_slope", dtdz_vec)
     new_tree.Branch("trkdtdz_unc"  , unc_vec)
     new_tree.Branch("trkdtdz_chisq", chisq_vec)
+    new_tree.Branch("trkdtdt_slope", dtdt_vec)
+    new_tree.Branch("trkdtdt_unc"  , unc_t_vec)
+    new_tree.Branch("trkdtdt_chisq", chisq_t_vec)
 
     # Loop over the events and clone the input, adding the tracker hit slope
     for entry in range(entries):
@@ -75,21 +82,29 @@ def skim_tree_chain(file_list_path, input_tree_name, output_file_path, max_files
         dtdz_vec.clear()
         unc_vec.clear()
         chisq_vec.clear()
+        dtdt_vec.clear()
+        unc_t_vec.clear()
+        chisq_t_vec.clear()
 
         # Retrieve the tracks
         tracks = chain.trk
         trkhits = chain.trkhits
         ntrks = tracks.size()
 
-        # Fit each track's dt/dz slope
+        # Fit each track's dt/dz and dt_hit/dt_trk slopes
         for itrk in range(ntrks):
             track = tracks[itrk]
             hits  = trkhits[itrk]
             hit_vals = [[hit.etime[hit.earlyend] - hit.tottdrift, hit.poca.z(), 5.] for hit in hits ]
+            t_v_t_vals = [[hit.etime[hit.earlyend] - hit.tottdrift, hit.ptoca, 5.] for hit in hits ]
             dtdz, unc, chisq = perform_tz_fit(hit_vals)
+            dtdt, unc_t, chisq_t = perform_tz_fit(t_v_t_vals)
             dtdz_vec.push_back(dtdz)
             unc_vec.push_back(unc)
             chisq_vec.push_back(chisq)
+            dtdt_vec.push_back(dtdt)
+            unc_t_vec.push_back(unc_t)
+            chisq_t_vec.push_back(chisq_t)
 
         # Add the data to the output tree
         new_tree.Fill()
