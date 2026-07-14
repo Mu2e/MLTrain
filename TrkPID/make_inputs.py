@@ -96,7 +96,7 @@ def skim_tree_chain(file_list_path, input_tree_name, output_file_path, max_files
             track = tracks[itrk]
             hits  = trkhits[itrk]
             hit_vals = [[hit.etime[hit.earlyend] - hit.tottdrift, hit.poca.z(), 5.] for hit in hits ]
-            t_v_t_vals = [[hit.etime[hit.earlyend] - hit.tottdrift, hit.ptoca, 5.] for hit in hits ]
+            t_v_t_vals = [[hit.ptoca+hit.udt, hit.ptoca, 5.] for hit in hits ]
             dtdz, unc, chisq = perform_tz_fit(hit_vals)
             dtdt, unc_t, chisq_t = perform_tz_fit(t_v_t_vals)
             dtdz_vec.push_back(dtdz)

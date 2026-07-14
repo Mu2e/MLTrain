@@ -374,7 +374,6 @@ if __name__ == "__main__":
     elif version == 1:
         # features = ['EoverP','dt', 'nActiveFrac', 'nNullFrac', 'fitcon', 'dtdz_ratio']
         # features = ['EoverP','dt', 'fitcon', 'dtdz_ratio']
-        # features = ['EoverP','dt']
         features = ['EoverP','dt', 'fitcon', 'dtdt_slope']
     else:
         raise ValueError(f'Unknown training verion value {version}')
