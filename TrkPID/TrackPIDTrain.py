@@ -123,7 +123,7 @@ def make_dataset(particle, dataset_name, csv_name):
 
 def train_model(dataframe, version):
     # Reduce variable precision for training speed
-    tf.keras.mixed_precision.set_global_policy('mixed_float16')
+    tf.keras.mixed_precision.set_global_policy('float32')
 
     PID_model = tf.keras.Sequential([
         tf.keras.layers.Input(shape=(n_features,), batch_size=32),
@@ -147,7 +147,7 @@ def train_model(dataframe, version):
     train_history = train_history.history   # extract the training history (loss as function of epochs)
     # Save model and training history
     PID_model.save(f"PID_model.v{version}.keras")
-    with open(f"train_history.v{version}json",'w') as history_file:
+    with open(f"train_history.v{version}.json",'w') as history_file:
         json.dump(train_history, history_file)
 
     return PID_model
