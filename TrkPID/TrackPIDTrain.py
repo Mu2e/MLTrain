@@ -146,8 +146,8 @@ def train_model(dataframe, version):
     train_history = PID_model.fit(dataframe[features], dataframe['label'], epochs = n_epochs, validation_split=0.2, callbacks=[early_stop])
     train_history = train_history.history   # extract the training history (loss as function of epochs)
     # Save model and training history
-    PID_model.save(f"PID_model.v{version}.keras")
-    with open(f"train_history.v{version}.json",'w') as history_file:
+    PID_model.save(f"PID_model_v{version}.keras")
+    with open(f"train_history_v{version}.json",'w') as history_file:
         json.dump(train_history, history_file)
 
     return PID_model
@@ -402,8 +402,8 @@ if __name__ == "__main__":
     if not args.skip_train:
         PID_model = train_model(df_train, version)
     else:   # Use an already trained model saved in keras format
-        PID_model = tf.keras.models.load_model(f"PID_model.v{version}.keras")
-        with open(f"train_history.v{version}.json",'r') as history_file:    # open file containing the training history to plot later
+        PID_model = tf.keras.models.load_model(f"PID_model_v{version}.keras")
+        with open(f"train_history_v{version}.json",'r') as history_file:    # open file containing the training history to plot later
             train_history = json.load(history_file)
         n_epochs = len(train_history['loss'])
 
@@ -416,7 +416,7 @@ if __name__ == "__main__":
         print('>>> Exporting to ONXX')
         onnx_signature = [tf.TensorSpec(input.shape, dtype=input.dtype, name=input.name) for input in PID_model.inputs]
         onnx_model, _ = tf2onnx.convert.from_keras(PID_model, input_signature=onnx_signature)
-        onnx.save(onnx_model, f"TrackPID.v{version}.onnx")
+        onnx.save(onnx_model, f"TrackPID_v{version}.onnx")
 
     df_train,results_train,confusion_matrix_train = make_results(PID_model, df_train, "train", 0.01)
     df_test ,results_test ,confusion_matrix_test  = make_results(PID_model, df_test , "test" , 0.01)
