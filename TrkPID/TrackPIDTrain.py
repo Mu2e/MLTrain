@@ -122,11 +122,10 @@ def make_dataset(particle, dataset_name, csv_name):
 
 
 def train_model(dataframe, version):
-    # Reduce variable precision for training speed
     tf.keras.mixed_precision.set_global_policy('float32')
 
     PID_model = tf.keras.Sequential([
-        tf.keras.layers.Input(shape=(n_features,), batch_size=32),
+        tf.keras.layers.Input(shape=(n_features,), batch_size=1),
         tf.keras.layers.Dense(5, activation='relu'),
         tf.keras.layers.Dense(10, activation='relu'),
         tf.keras.layers.Dense(5, activation='relu'),
@@ -161,35 +160,27 @@ def make_results(model, dataset, dataset_name, bkg_eff = 0.01):
     dataset['prediction'] = model.predict(dataset[features])
 
     # Determine the cut value that has the given background efficiency
-    min_val, max_val = -1., 1.
-    threshold = -1.
-    eff = 1.
-    tolerance = 0.01
-    nbkg = (dataset['label'] == 0).sum()
-    while abs(eff - bkg_eff)/bkg_eff > tolerance:
-      threshold = (min_val + max_val)/2.
-      npass = ((dataset['label'] == 0) & (dataset['prediction'] > threshold)).sum()
-      eff = npass / nbkg
-      if eff > bkg_eff: min_val = threshold
-      else            : max_val = threshold
+    threshold = np.quantile(dataset.loc[dataset['label']==0, 'prediction'], 1 - bkg_eff)
+    print(f"Threshold targeting {bkg_eff:.3f} background efficiency: {threshold:.4f}")
 
     dataset['predict_label'] = (dataset['prediction'] > threshold).astype(int)
 
     # Create confusion matrix
     confusion_matrix = tf.math.confusion_matrix(dataset['label'], dataset['predict_label'], num_classes=2)
-    print("\n Confusion matrix: \n [ True negative (correctly labeled cosmic muons) ; False positive (mislabeled cosmic muons) ] \n [ False negative (mislabeled conversion electrons) ; True positive (correctly labeled conversion electron) ]\n", confusion_matrix)
 
     true_negative , false_positive = confusion_matrix[0].numpy()
     false_negative , true_positive = confusion_matrix[1].numpy()
 
-    TPR = true_positive / (true_positive + false_negative)
-    TNR = true_negative / (true_negative + false_positive)
+    total_sig = true_positive + false_negative
+    total_bkg = true_negative + false_positive
+    TPR = true_positive / (total_sig)
+    TNR = true_negative / (total_bkg)
 
     print("\n", dataset_name, " dataset results:\n")
-    print(f"True Positive Rate (correctly labeled conversion electrons / all conversion electrons): {100*TPR:.4f}%")
-    print(f"True Negative Rate (correcly labeled cosmic muons / all cosmic muons): {100*TNR:.4f}%")
-    print(f"False Positive Rate (mislabeled conversion electrons / all conversion electrons): {100*(1-TPR):.4f}%")
-    print(f"False Negative Rate (mislabeled cosmic muons / all cosmic muons): {100*(1-TNR):.4f}%\n")
+    print(f"True  Positive Rate: {100*TPR:.4f}% ({true_positive}/{total_sig})")
+    print(f"True  Negative Rate: {100*TNR:.4f}% ({true_negative}/{total_bkg})")
+    print(f"False Positive Rate: {100*(1-TNR):.4f}% ({false_positive}/{total_bkg})")
+    print(f"False Negative Rate: {100*(1-TPR):.4f}% ({false_negative}/{total_sig})\n")
 
     return dataset, results, confusion_matrix
 
@@ -376,7 +367,7 @@ if __name__ == "__main__":
         # features = ['EoverP','dt', 'fitcon', 'dtdz_ratio']
         features = ['EoverP','dt', 'fitcon', 'dtdt_slope']
     else:
-        raise ValueError(f'Unknown training verion value {version}')
+        raise ValueError(f'Unknown training version value {version}')
     print(f'>>> Using input features {features}')
     n_features = len(features)
 
@@ -436,5 +427,5 @@ if __name__ == "__main__":
         plot_feature(df_train_e, df_train_mu, "prediction", figdir, 'log', '_train')
         plot_feature(df_test_e , df_test_mu , "prediction", figdir, 'log')
         df_test = plot_ROC(df_test, figdir)
-        plot_history("train_history.json", results_test, figdir)
+        plot_history(f"train_history_v{version}.json", results_test, figdir)
         plot_model(PID_model, figdir)

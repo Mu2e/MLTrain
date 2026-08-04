@@ -33,7 +33,7 @@ def analytic_gaussian_overlap(mu1, sigma1, mu2, sigma2):
 
     if math.isclose(sigma1, sigma2):
         z = -abs(mu1 - mu2) / (2 * sigma1)
-        return 2 * ROOT.TMath.GausI(z, 0, 1)
+        return 2 * ROOT.TMath.Freq(z)
 
     # Quadratic equation coefficients
     A = sigma1**2 - sigma2**2

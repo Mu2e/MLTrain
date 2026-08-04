@@ -8,7 +8,7 @@ TrkOnlyPID is a machine learning algorithm is trained to differentiate between e
 
 ### Dataset creation
 EventNtuple data files are used as input to the training.
-The ntuples are skimmed using [make_inputs.py](make_inputs.py) which drops unnessary data as well as adds branches if any are needed.
+The ntuples are skimmed using [make_inputs.py](make_inputs.py) which drops unnecessary data as well as adds branches if any are needed.
 
 ### Model training
 The python code provided in the file [TrkOnlyPIDTrain.py](TrkOnlyPIDTrain.py) is used to:
@@ -29,7 +29,7 @@ This version has been trained using MDC2025 datasets:
 * background: nts.mu2e.FlatMuMinusOnSpill-reco-ntuple.MDC2025-004.root
 It was trained using electrons and muons generated with a flat momentum spectrum from muon stop vertices in the target.
 The input features are:
-* p(chi^2) of the track
-* tracker hit dt/dz slope divided by the expected slope from the track fit assuming an electron mass
 * N(active hits) / N(hits)
 * N(null ambiguity hits) / N(active hits)
+* p(chi^2) of the track
+* straw hit time vs track time at the hit slope

@@ -8,10 +8,10 @@ TrkPID is a machine learning algorithm is trained to differentiate between elect
 
 ### Dataset creation
 EventNtuple data files are used as input to the training.
-The ntuples are skimmed using [make_inputs.py](make_inputs.py) which drops unnessary data as well as adds branches if any are needed (may require setting up an Analysis musing for EventNtuple libraries)
+The ntuples are skimmed using [make_inputs.py](make_inputs.py) which drops unnecessary data as well as adds branches if any are needed (may require setting up an Analysis musing for EventNtuple libraries)
 
 ### Model training
-The python code provided in the file [TrackPIDTrain.py](TrkPIDTrain.py) is used to:
+The python code provided in the file [TrackPIDTrain.py](TrackPIDTrain.py) is used to:
 * skim track information from the input ntuples and store the data in local csv files
 * define the neural network architecture
 * train the algorithm and save the model weights into an ONNX file named "TrackPID.onnx"

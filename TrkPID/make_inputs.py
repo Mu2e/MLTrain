@@ -6,6 +6,7 @@ def linear_model(x, slope, intercept):
     return slope*x + intercept
 
 def perform_tz_fit(hits):
+    if len(hits) < 3: return 0., 0., 0.
     t = np.array([ hit[0] for hit in hits ])
     z = np.array([ hit[1] for hit in hits ])
     e = np.array([ hit[2] for hit in hits ])
