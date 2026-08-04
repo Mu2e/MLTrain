@@ -70,6 +70,8 @@ def apply_cut(array, array_mc, particle):
                     'nhits' : evt_it['trk', 'trk.nhits'][i_trk],
                     'dtdz_slope' : evt_it['trkdtdz_slope'][i_trk],
                     'dtdz_chisq' : evt_it['trkdtdz_chisq'][i_trk],
+                    'dtdt_slope' : evt_it['trkdtdt_slope'][i_trk],
+                    'dtdt_chisq' : evt_it['trkdtdt_chisq'][i_trk],
                     'mom': trksegs_it['mom','mag'],
                     'time': trksegs_it['time'],
                     'pt': np.sqrt(trksegs_it['mom','fCoordinates','fX']**2 + trksegs_it['mom','fCoordinates','fY']**2),
@@ -91,7 +93,7 @@ def make_dataset(particle, dataset_name, csv_name):
     # dataset_name: path to the ROOT file containing the EventNtuple tree
     # csv_name: name of the csv file in which the trimmed dataset will be saved in ; this is used to access the data easier later for training
 
-    branches_reco = ['trk','trkqual','trksegs','trksegpars_lh','trkcalohit', 'trkdtdz_slope', 'trkdtdz_chisq']
+    branches_reco = ['trk','trkqual','trksegs','trksegpars_lh','trkcalohit', 'trkdtdz_slope', 'trkdtdz_chisq', 'trkdtdt_slope', 'trkdtdt_chisq']
     branches_mc = ['trkmc','trkmcsim','trksegsmc']
     array = import_evtntuple(dataset_name, branches_reco)
     array_mc = import_evtntuple(dataset_name, branches_mc)
@@ -141,12 +143,26 @@ def train_model(dataframe):
     return PID_model
 
 
-def make_results(model, dataset, dataset_name, threshold = 0.5):
+def make_results(model, dataset, dataset_name, bkg_eff = 0.01):
     # Print model performances
     results = model.evaluate(dataset[features], dataset['label'])
     print("\n", dataset_name, "loss,", dataset_name, "accuracy,", dataset_name, "AUC:", results, "\n")
 
     dataset['prediction'] = model.predict(dataset[features])
+
+    # Determine the cut value that has the given background efficiency
+    min_val, max_val = -1., 1.
+    threshold = -1.
+    eff = 1.
+    tolerance = 0.01
+    nbkg = (dataset['label'] == 0).sum()
+    while abs(eff - bkg_eff)/bkg_eff > tolerance:
+      threshold = (min_val + max_val)/2.
+      npass = ((dataset['label'] == 0) & (dataset['prediction'] > threshold)).sum()
+      eff = npass / nbkg
+      if eff > bkg_eff: min_val = threshold
+      else            : max_val = threshold
+
     dataset['predict_label'] = (dataset['prediction'] > threshold).astype(int)
 
     # Create confusion matrix
@@ -160,10 +176,10 @@ def make_results(model, dataset, dataset_name, threshold = 0.5):
     TNR = true_negative / (true_negative + false_positive)
 
     print("\n", dataset_name, " dataset results:\n")
-    print("True Positive Rate (correctly labeled conversion electrons / all conversion electrons): ", 100*TPR, "%")
-    print("True Negative Rate (correcly labeled cosmic muons / all cosmic muons): ", 100*TNR, "%")
-    print("False Positive Rate (mislabeled conversion electrons / all conversion electrons): ", 100*(1-TPR), "%")
-    print("False Negative Rate (mislabeled cosmic muons / all cosmic muons): ", 100*(1-TNR), "%\n")
+    print(f"True Positive Rate (correctly labeled conversion electrons / all conversion electrons): {100*TPR:.4f}%")
+    print(f"True Negative Rate (correcly labeled cosmic muons / all cosmic muons): {100*TNR:.4f}%")
+    print(f"False Positive Rate (mislabeled conversion electrons / all conversion electrons): {100*(1-TPR):.4f}%")
+    print(f"False Negative Rate (mislabeled cosmic muons / all cosmic muons): {100*(1-TNR):.4f}%\n")
 
     return dataset, results, confusion_matrix
 
@@ -327,7 +343,7 @@ if __name__ == "__main__":
 
     # Make input features
     if version == 0:
-        features = ['nActiveFrac', 'nNullFrac', 'fitcon', 'dtdz_ratio']
+        features = ['nActiveFrac', 'nNullFrac', 'fitcon', 'dtdt_slope']
     else:
         raise ValueError(f'Unknown training verion value {version}')
     print(f'>>> Using input features {features}')
@@ -355,8 +371,8 @@ if __name__ == "__main__":
     if not args.skip_train:
         PID_model = train_model(df_train)
     else:   # Use an already trained model saved in keras format
-        PID_model = tf.keras.models.load_model("TrkOnlyPID_model.keras")
-        with open("train_history.json",'r') as history_file:    # open file containing the training history to plot later
+        PID_model = tf.keras.models.load_model(f"TrkOnlyPID_model_v{version}.keras")
+        with open(f"train_history_v{version}.json",'r') as history_file:    # open file containing the training history to plot later
             train_history = json.load(history_file)
         n_epochs = len(train_history['loss'])
 
@@ -369,10 +385,10 @@ if __name__ == "__main__":
         print('>>> Exporting to ONXX')
         onnx_signature = [tf.TensorSpec(input.shape, dtype=input.dtype, name=input.name) for input in PID_model.inputs]
         onnx_model, _ = tf2onnx.convert.from_keras(PID_model, input_signature=onnx_signature)
-        onnx.save(onnx_model, "TrkOnlyPID.onnx")
+        onnx.save(onnx_model, f"TrkOnlyPID_v{version}.onnx")
 
-    df_train,results_train,confusion_matrix_train = make_results(PID_model, df_train, "train", 0.5)
-    df_test ,results_test ,confusion_matrix_test  = make_results(PID_model, df_test , "test" , 0.5)
+    df_train,results_train,confusion_matrix_train = make_results(PID_model, df_train, "train", 0.1)
+    df_test ,results_test ,confusion_matrix_test  = make_results(PID_model, df_test , "test" , 0.1)
 
     df_train_e  = df_train[df_train["label"] == 1]
     df_train_mu = df_train[df_train["label"] == 0]
