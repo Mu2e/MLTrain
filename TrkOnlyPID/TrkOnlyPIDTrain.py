@@ -1,7 +1,7 @@
-# TrackPIDTrain.py
-# Make dataset, train and test artificial neural network for TrackPID
-# Original author: Leo Borrel
-# Date: 2025-10-29
+# TrkOnlyPIDTrain.py
+# Make dataset, train and test artificial neural network for TrackPID without calo info
+# Original author: Michael MacKenzie, based on TrkPID
+# Date: 2026-06-23
 
 import argparse
 import numpy as np
@@ -49,8 +49,6 @@ def apply_cut(array, array_mc, particle):
                 continue
             if array_mc['trkmcsim','pdg'][i_evt,i_trk,0] != mc_pdg:     #mask mc pdg
                 continue
-            if evt_it['trkcalohit','trkcalohit.active'][i_trk] == 0:    # calo hit exists
-                continue
             if evt_it['trkqual','trkqual.result'][i_trk] < 0.2:    # mask TrkQual
                 continue
             trk_it = evt_it['trksegs'][i_trk]
@@ -79,14 +77,6 @@ def apply_cut(array, array_mc, particle):
                     'pt': np.sqrt(trksegs_it['mom','fCoordinates','fX']**2 + trksegs_it['mom','fCoordinates','fY']**2),
                     'pz': trksegs_it['mom','fCoordinates','fZ'],
                     'edep': evt_it['trkcalohit','trkcalohit.edep'][i_trk],
-                    'dt': evt_it['trkcalohit','trkcalohit.dt'][i_trk],
-                    'trkdepth': evt_it['trkcalohit','trkcalohit.trkdepth'][i_trk],
-                    'pocaX': evt_it['trkcalohit','trkcalohit.poca.fCoordinates.fX'][i_trk],
-                    'pocaY': evt_it['trkcalohit','trkcalohit.poca.fCoordinates.fY'][i_trk],
-                    'pocaZ': evt_it['trkcalohit','trkcalohit.poca.fCoordinates.fZ'][i_trk],
-                    'pocamomX': evt_it['trkcalohit','trkcalohit.mom.fCoordinates.fX'][i_trk],
-                    'pocamomY': evt_it['trkcalohit','trkcalohit.mom.fCoordinates.fY'][i_trk],
-                    'pocamomZ': evt_it['trkcalohit','trkcalohit.mom.fCoordinates.fZ'][i_trk],
                     'label': label_particle,
                     })
 
@@ -121,7 +111,7 @@ def make_dataset(particle, dataset_name, csv_name):
     df_array.to_csv(csv_name, index=True)
 
 
-def train_model(dataframe, version):
+def train_model(dataframe):
     tf.keras.mixed_precision.set_global_policy('float32')
 
     PID_model = tf.keras.Sequential([
@@ -137,7 +127,7 @@ def train_model(dataframe, version):
     model_optimizer = tf.keras.optimizers.Adam()
     model_metrics = [tf.keras.metrics.BinaryAccuracy(threshold=0.5), tf.keras.metrics.AUC(from_logits=False)]
     PID_model.compile(loss = model_loss, optimizer = model_optimizer, metrics = model_metrics)
-    early_stop = tf.keras.callbacks.EarlyStopping(monitor = "val_loss", start_from_epoch = 100, patience = 20, restore_best_weights = True, verbose = 1)
+    early_stop = tf.keras.callbacks.EarlyStopping(monitor = "val_loss", start_from_epoch = 10, patience = 15, restore_best_weights = True, verbose = 1)
 
     print(PID_model.summary())
 
@@ -145,7 +135,7 @@ def train_model(dataframe, version):
     train_history = PID_model.fit(dataframe[features], dataframe['label'], epochs = n_epochs, validation_split=0.2, callbacks=[early_stop])
     train_history = train_history.history   # extract the training history (loss as function of epochs)
     # Save model and training history
-    PID_model.save(f"PID_model_v{version}.keras")
+    PID_model.save(f"TrkOnlyPID_model_v{version}.keras")
     with open(f"train_history_v{version}.json",'w') as history_file:
         json.dump(train_history, history_file)
 
@@ -185,8 +175,6 @@ def make_results(model, dataset, dataset_name, bkg_eff = 0.01):
     return dataset, results, confusion_matrix
 
 def add_variables(df):
-    df['deltaE']         = df['edep'] - df['mom']
-    df['EoverP']         = df['edep'] / df['mom']
     df['cz']             = df['pz'] / df['mom']
     df['velocity']       = 300.*df['mom']/np.sqrt(df['mom']**2 + 0.511**2)
     df['dtdz_exp']       = 1. / (df['velocity']*df['cz'])
@@ -194,11 +182,7 @@ def add_variables(df):
     df['nActiveFrac']    = df['nactive'] / df['nhits']
     df['nMatActiveFrac'] = df['nmatactive'] / df['nhits']
     df['nNullFrac']      = df['nnullambig'] / df['nactive']
-    df['rpoca']          = np.sqrt(np.power(df['pocaX'],2) + np.power(df['pocaY'],2))
-    df['trkdir']         = ( df['pocaX'] * df['pocamomX'] + df['pocaY'] * df['pocamomY'] ) / ( np.sqrt(np.power(df['pocaX'],2) + np.power(df['pocaY'],2)) * np.sqrt(np.power(df['pocamomX'],2) + np.power(df['pocamomY'],2)) )
     return df
-
-## Plots
 
 def plot_dataset(csv_name, particle, figdir):
     df = pd.read_csv(csv_name, index_col=0)
@@ -209,18 +193,6 @@ def plot_dataset(csv_name, particle, figdir):
     ax.set_xlabel("reco mom [MeV]")
     ax.set_title("Reconstructed momentum of "+particle)
     fig.savefig(f'{figdir}mom.png')
-
-    fig,ax = plt.subplots(1,1)
-    ax.hist(df['edep']-df['mom'], bins=100)
-    ax.set_xlabel("deltaE [MeV]")
-    ax.set_title("Difference between calorimeter cluster energy and track momentum of "+particle)
-    fig.savefig(f'{figdir}deltaE.png')
-
-    fig,ax = plt.subplots(1,1)
-    ax.hist(df['dt'], bins=100)
-    ax.set_xlabel("deltaT [MeV]")
-    ax.set_title("Difference between calorimeter cluster time and tracker time of "+particle)
-    fig.savefig(f'{figdir}dt.png')
 
 def plot_model(model, figdir):
     tf.keras.utils.plot_model(model,
@@ -234,6 +206,7 @@ def plot_model(model, figdir):
                               )
     # text-based summary
     model.summary()
+
 
 def plot_feature(dataset_e, dataset_mu, feature, figdir, scale = 'linear', tag = ''):
     # Plot of a branch
@@ -332,7 +305,7 @@ def make_arguments():
     parser.add_argument("--data-dir", "-d", type=str, default="/exp/mu2e/data/users/mmackenz/trkpid/data/", help="Directory with data files")
     parser.add_argument("--signal-file", "-s", type=str, default="nts.flate.root", help="Signal data file")
     parser.add_argument("--background-file", "-b", type=str, default="nts.flatmu.root", help="Background data file")
-    parser.add_argument("--version", "-V", type=int, default=1, help="Training version")
+    parser.add_argument("--version", "-V", type=int, default=0, help="Training version")
     parser.add_argument("--skip-import", "-I", action='store_true', help="Skip importing of data into csv file")
     parser.add_argument("--skip-train", "-T", action='store_true', help="Skip training of the model")
     parser.add_argument("--skip-export", "-E", action='store_true', help="Skip exporting the model to Onnx")
@@ -361,11 +334,7 @@ if __name__ == "__main__":
 
     # Make input features
     if version == 0:
-        features = ['deltaE','rpoca','trkdir','dt']
-    elif version == 1:
-        # features = ['EoverP','dt', 'nActiveFrac', 'nNullFrac', 'fitcon', 'dtdz_ratio']
-        # features = ['EoverP','dt', 'fitcon', 'dtdz_ratio']
-        features = ['EoverP','dt', 'fitcon', 'dtdt_slope']
+        features = ['nActiveFrac', 'nNullFrac', 'fitcon', 'dtdt_slope']
     else:
         raise ValueError(f'Unknown training version value {version}')
     print(f'>>> Using input features {features}')
@@ -391,9 +360,9 @@ if __name__ == "__main__":
     print(f'>>> Performing training with {max_train} from the input {n_sig+n_bkg} events')
 
     if not args.skip_train:
-        PID_model = train_model(df_train, version)
+        PID_model = train_model(df_train)
     else:   # Use an already trained model saved in keras format
-        PID_model = tf.keras.models.load_model(f"PID_model_v{version}.keras")
+        PID_model = tf.keras.models.load_model(f"TrkOnlyPID_model_v{version}.keras")
         with open(f"train_history_v{version}.json",'r') as history_file:    # open file containing the training history to plot later
             train_history = json.load(history_file)
         n_epochs = len(train_history['loss'])
@@ -407,10 +376,10 @@ if __name__ == "__main__":
         print('>>> Exporting to ONXX')
         onnx_signature = [tf.TensorSpec(input.shape, dtype=input.dtype, name=input.name) for input in PID_model.inputs]
         onnx_model, _ = tf2onnx.convert.from_keras(PID_model, input_signature=onnx_signature)
-        onnx.save(onnx_model, f"TrackPID_v{version}.onnx")
+        onnx.save(onnx_model, f"TrkOnlyPID_v{version}.onnx")
 
-    df_train,results_train,confusion_matrix_train = make_results(PID_model, df_train, "train", 0.01)
-    df_test ,results_test ,confusion_matrix_test  = make_results(PID_model, df_test , "test" , 0.01)
+    df_train,results_train,confusion_matrix_train = make_results(PID_model, df_train, "train", 0.1)
+    df_test ,results_test ,confusion_matrix_test  = make_results(PID_model, df_test , "test" , 0.1)
 
     df_train_e  = df_train[df_train["label"] == 1]
     df_train_mu = df_train[df_train["label"] == 0]
