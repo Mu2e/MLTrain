@@ -19,7 +19,8 @@ The python code provided in the file [TrackPIDTrain.py](TrackPIDTrain.py) is use
 * generate plots to provide more information on the dataset, how the training went, and how the model perform
 
 Once the model is trained and the weights are saved in an ONNX file, this file can be used by TMVA:SOFIE to generate the inference code
-that can be used in Offline (for details about this process, check [this documentation](https://github.com/Mu2e/MLTrain/blob/main/TrkQual/README.md#converting-a-model-for-use-in-offline)).
+that can be used in Offline.
+See `scripts/CreateInference.C` to create this model.
 
 ## Version history
 
