@@ -1,0 +1,72 @@
+# Samuel Grant 2025
+# Define cutsets for cosmic-ray-induced background analysis
+
+##########################################################
+# Define baseline defaults (from sam-grant/mu2e-cosmic)
+##########################################################
+defaults:
+    description: "Baseline defaults"
+    thresholds:
+        track_pdg: 11
+        lo_nactive: 20
+        lo_trkqual: 0.8
+        lo_t0_ns: 640
+        hi_t0_ns: 1650
+        lo_maxr_mm: 450
+        hi_maxr_mm: 680
+        hi_d0_mm: 100
+        hi_t0err: 0.9
+        lo_pitch_angle: 0.5
+        hi_pitch_angle: 1.0
+        lo_crv_start_ns: 420.0
+        hi_crv_end_ns: 1700.0
+        lo_veto_dt_ns: -150.0
+        hi_veto_dt_ns: 150.0
+        lo_wide_win_mevc: 85
+        hi_wide_win_mevc: 200
+        lo_ext_win_mevc: 100
+        hi_ext_win_mevc: 110
+        lo_sig_win_mevc: 103.6
+        hi_sig_win_mevc: 104.9
+    active:
+        one_reco_electron: true 
+        is_reco_electron: true
+        thru_trk: true
+        good_trkqual: true
+        within_t0: true
+        is_downstream: true 
+        has_hits: true
+        within_t0err: true
+        within_d0: true
+        within_pitch_angle_lo: true
+        within_pitch_angle_hi: true
+        within_lhr_max_lo: false 
+        within_lhr_max_hi: true
+        is_truth_electron: true
+        within_coinc_start_time: false
+        within_coinc_end_time: false
+        unvetoed: true
+        within_wide_win: true
+        within_ext_win: true
+        within_sig_win: true
+
+##########################################################
+# Define custom cutsets which are overridden from defaults
+# You can turn cuts off and edit thresholds here
+##########################################################
+cutsets:
+    ########################
+    # Analysis cut sets
+    ########################
+    MLPreprocess:
+        description:
+            "Preselection cuts for ML"
+        thresholds:
+            lo_trkqual: 0.2
+        active:
+            within_coinc_start_time: false 
+            within_coinc_end_time: false
+            unvetoed: false
+            within_wide_win: true # no real cosmics below 85 MeV/c 
+            within_ext_win: false
+            within_sig_win: false
