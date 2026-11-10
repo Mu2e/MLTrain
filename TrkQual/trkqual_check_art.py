@@ -25,11 +25,19 @@ README.md), then:
 With --plots, it also plots the models against each other on the selected tracks, from art's
 scores: score distributions, ROC curves, and the efficiency against momentum and the momentum
 resolution of the tracks passing each cut.
+
+With --timing, it also times each model on the same tracks: in python, and in C++ with the calls
+TrackQuality_module.cc makes (scripts/trkqual_timing.cc, built against the Musing's ONNXRuntime and
+XGBoost).
 """
 
 import argparse
 import json
+import os
+import platform
+import subprocess
 import sys
+import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -304,6 +312,102 @@ def write_plots(plotdir, title, models, scores, cuts, high_qual, low_qual, reco_
     return aucs
 
 
+TIMING_SCRIPT = Path(__file__).resolve().parent / "scripts" / "trkqual_timing.sh"
+
+
+def median_us_per_track(fn, n_tracks, repeats):
+    """the median over repeats of fn's wall-clock and CPU time, in microseconds per track"""
+    wall, cpu = [], []
+    for _ in range(repeats):
+        t0, c0 = time.perf_counter(), time.process_time()
+        fn()
+        wall.append((time.perf_counter() - t0) / n_tracks * 1e6)
+        cpu.append((time.process_time() - c0) / n_tracks * 1e6)
+    return float(np.median(wall)), float(np.median(cpu))
+
+
+def time_python(model, rows, n_one, repeats):
+    """python time per track: every track in one call, as this script scores them, and one track per call, as the module does"""
+    model.predict(rows)  # warm-up
+    all_wall, all_cpu = median_us_per_track(lambda: model.predict(rows), len(rows), repeats)
+    some = rows[:n_one]
+
+    def one_at_a_time():
+        for i in range(len(some)):
+            model.predict(some[i:i + 1])
+
+    one_wall, one_cpu = median_us_per_track(one_at_a_time, len(some), repeats)
+    return {"python_all_tracks_us": all_wall, "python_all_tracks_cpu_us": all_cpu,
+            "python_one_track_us": one_wall, "python_one_track_cpu_us": one_cpu}
+
+
+def time_cpp(models, rows, workdir, musing, repeats):
+    """C++ time per track, one track per call, and the C++ scores, from scripts/trkqual_timing.sh in a clean environment"""
+    feature_file = workdir / "timing_features.f32"
+    rows.astype(np.float32).tofile(feature_file)
+    log_file = workdir / "timing_cpp.log"
+    cmd = ["env", "-i", f"HOME={os.environ['HOME']}", f"USER={os.environ.get('USER', '')}", "PATH=/usr/bin:/bin",
+           "bash", str(TIMING_SCRIPT), musing, str(workdir), str(feature_file), str(rows.shape[1]), str(repeats),
+           *(str(m.path.resolve()) for m in models.values())]
+    tt.log(f"C++ timing in the {musing} environment ({TIMING_SCRIPT.name}), log in {log_file}")
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    log_file.write_text(proc.stderr)
+    if proc.returncode:
+        sys.exit(f"trkqual_check_art: the C++ timing failed (exit {proc.returncode}), see {log_file}:\n"
+                 + "\n".join(proc.stderr.splitlines()[-15:]))
+    by_path = {r["model"]: r for r in (json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{"))}
+    result = {}
+    for branch, model in models.items():
+        r = by_path.get(str(model.path.resolve()))
+        if r is None or r["tracks"] != len(rows):
+            sys.exit(f"trkqual_check_art: the C++ timing gave no result for all {len(rows)} tracks of {model.path}")
+        result[branch] = {"cpp_one_track_us": float(np.median(r["wall_us_per_track"])),
+                          "cpp_one_track_cpu_us": float(np.median(r["cpu_us_per_track"])),
+                          "scores": np.fromfile(r["scores"], dtype=np.float32)}
+    return result
+
+
+def cpu_name():
+    try:
+        with open("/proc/cpuinfo") as f:
+            return next((line.split(":", 1)[1].strip() for line in f if line.startswith("model name")), "unknown")
+    except OSError:
+        return "unknown"
+
+
+def timing(models, features, workdir, musing, n_one, repeats, tolerance):
+    """Each model's time per track in python and in C++, on the tracks the module scores. Returns the record and the failures."""
+    rows = features[np.isfinite(features).all(axis=1)].astype(np.float32)
+    n_one = min(n_one, len(rows))
+    if os.environ.get("OMP_NUM_THREADS") != "1":
+        tt.log("OMP_NUM_THREADS is not 1: python's XGBoost and numpy use every core, so the python times are not "
+               "single-core times (their cpu keys show the cost)")
+    tt.log(f"Timing on {len(rows)} tracks ({n_one} one at a time in python), median of {repeats} passes")
+    python = {branch: time_python(model, rows, n_one, repeats) for branch, model in models.items()}
+    cpp = time_cpp(models, rows, workdir, musing, repeats)
+    reference = score(models, rows)  # the same model files scored in python: the C++ program must agree
+    record, failures = {}, []
+    for branch in models:
+        diff = float(np.max(np.abs(cpp[branch].pop("scores").astype(np.float64) - reference[branch]))) if len(rows) else 0.0
+        r = {**python[branch], **cpp[branch], "cpp_scores_max_abs_diff": diff}
+        r["python_one_track_over_cpp"] = r["python_one_track_us"] / r["cpp_one_track_us"]
+        record[branch] = r
+        tt.log(f"  {branch}: C++ {r['cpp_one_track_us']:.2f} us/track (CPU {r['cpp_one_track_cpu_us']:.2f}); "
+               f"python {r['python_one_track_us']:.1f} us/track one at a time, {r['python_all_tracks_us']:.2f} "
+               f"us/track all at once; C++ scores agree with python to {diff:.1e}")
+        if not diff <= tolerance:
+            failures.append(f"timing {branch}")
+    return {"tracks": int(len(rows)), "python_one_track_tracks": int(n_one), "repeats": repeats, "musing": musing,
+            "host": platform.node(), "cpu": cpu_name(), "omp_num_threads": os.environ.get("OMP_NUM_THREADS"),
+            "units": "microseconds per track; wall clock unless the key says cpu; the median of the passes",
+            "python_ann": "ONNX's reference evaluator (onnx.reference), the pure-python implementation this script "
+                          "checks against; not ONNXRuntime, and not Keras as in the notebook",
+            "python_bdt": "xgboost.Booster.predict on a DMatrix",
+            "cpp": "one track per call, as TrackQuality_module.cc: ONNXRuntime with default session options, "
+                   "the XGBoost C API with nthread 1",
+            "models": record}, failures
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("config", help="the training configuration (YAML), e.g. configs/v3.0.yaml")
@@ -321,7 +425,16 @@ def main():
     parser.add_argument("--title", default="scores from art", help="the plots' title")
     parser.add_argument("--workdir", default="check_art", help="where the TrkQual tree (remade on every run) and check_art.json go")
     parser.add_argument("--tolerance", type=float, default=1e-5, help="largest allowed score difference")
+    parser.add_argument("--timing", action="store_true",
+                        help="also time each model per track, in python and in C++ (needs /cvmfs and the Musing)")
+    parser.add_argument("--timing-musing", default="AnalysisMDC2025",
+                        help="the Musing whose ONNXRuntime and XGBoost the C++ timing uses")
+    parser.add_argument("--timing-one-track", type=int, default=1000,
+                        help="tracks scored one at a time in python (the slow way)")
+    parser.add_argument("--timing-repeats", type=int, default=3, help="timed passes; the median is kept")
     args = parser.parse_args()
+    if args.timing and not TIMING_SCRIPT.exists():
+        sys.exit(f"trkqual_check_art: --timing needs {TIMING_SCRIPT}")
 
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
@@ -405,6 +518,12 @@ def main():
         aucs = write_plots(Path(args.plots), args.title, models, art_b, cuts, high_qual, low_qual,
                            ds.reco_mom[matched], ds.mom_res[matched])
 
+    timings = {}
+    if args.timing:
+        timings, timing_failures = timing(models, features, workdir, args.timing_musing, args.timing_one_track,
+                                          args.timing_repeats, args.tolerance)
+        failures += timing_failures
+
     out = workdir / "check_art.json"
     with open(out, "w") as f:
         json.dump({"config": args.config, "ntuples": [str(f) for f in files], "tolerance": args.tolerance,
@@ -413,7 +532,7 @@ def main():
                    "all_tracks": result_a, "selected_tracks": result_b,
                    "selected": {"tracks": int(len(match)), "matched": int(matched.sum()), "ambiguous": ambiguous},
                    "feature_differences": feature_differences, "efficiency": efficiency,
-                   "failures": failures}, f, indent=2)
+                   "timing": timings, "failures": failures}, f, indent=2)
     tt.log(f"Wrote {out}")
     if failures:
         sys.exit(f"trkqual_check_art: FAILED: {', '.join(failures)}")

@@ -139,6 +139,18 @@ The plots use art's scores on the tracks the training selects. Each kind of mode
 * the efficiency against momentum and the momentum resolution of the tracks passing each cut, and
 * per-track scatter plots of the models of each kind.
 
+#### Timing the Models
+Add ```--timing``` to time each ```--leaf``` model on the same tracks, in python and in C++. Run it with ```export OMP_NUM_THREADS=1``` in the python shell too, or python's XGBoost and numpy use every core. The C++ side is ```scripts/trkqual_timing.cc```: it scores the tracks one per call with the calls ```TrackQuality_module.cc``` makes (ONNXRuntime with default session options, the XGBoost C API with nthread 1). The script builds it against the ONNXRuntime and XGBoost of the Musing art uses (```--timing-musing```, default ```AnalysisMDC2025```) in a clean environment, so it needs ```/cvmfs```, and checks that its scores match python's. ```check_art.json``` gets a ```timing``` block: for each model, the time per track in C++, in python one track per call, and in python with all tracks in one call, wall clock and CPU, plus the host and CPU. The C++ time covers the model only; the module also builds the features from the ```KalSeed```.
+
+On 6,443 tracks of ```ensembleMDS3cMix1BB``` (v3.0 models, one core of a Xeon Silver 4214R), in microseconds per track:
+
+| model | C++, one track per call (as in art) | python, one track per call | python, all tracks in one call |
+|---|---|---|---|
+| ANN1 v3.0 | 5.8 | 278 | 35 |
+| BDT1 v3.0 | 125 | 298 | 2.7 |
+
+In art the ANN is about 20 times faster than the BDT. In python the BDT is faster when it scores many tracks in one call, as the notebook does. The trees themselves take under 3 microseconds per track (python, all tracks in one call), so most of the BDT's 125 in art is XGBoost's cost per call: a ```DMatrix``` made and freed for every track. Python runs the ANN with ONNX's reference evaluator, which is written in python, so its python time says little about the network itself.
+
 ### Training a Model in the Notebook
 For training, you need to ssh into a mu2egpvm machine with a port forwarded, and setup the correct python environment:
 
