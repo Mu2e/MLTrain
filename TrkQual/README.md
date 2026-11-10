@@ -39,7 +39,119 @@ git fetch mu2e main # get the latest and greatest
 git checkout --no-track -b your-new-branchname mu2e/main
 ```
 
-### Training a Model
+### Training from the Command Line
+```trkqual_train.py``` runs the same steps as the notebook with no Jupyter: it makes any missing TrkQual trees, trains the models, sets each trkqual cut at the configured low-quality rejection, and saves the models, plots, the ```*plots.root``` files and a ```summary.json``` (cuts, efficiencies, AUCs, package versions). Everything that changes between trainings lives in a config file under ```configs/```:
+
+```
+mu2einit
+pyenv trkqual 1.2.0
+cd MLTrain/TrkQual
+./trkqual_train.py configs/v3.0.yaml --outdir out/v3.0
+```
+
+For a new training, copy the latest config, change the datasets and ```training_version```, and commit the config with the model. A training is reproducible: two runs of the same config write identical ```.onnx``` and ```.ubj``` files.
+
+To evaluate models that are already trained (for example the files in ArtAnalysis) instead of training new ones:
+
+```
+./trkqual_train.py configs/v3.0.yaml --models-from ../../ArtAnalysis/TrkDiag/data --outdir out/check
+```
+
+```--model``` evaluates any file as one of the config's models. Use it, for example, to set an older version's cuts on this training's datasets, so that two versions can be compared at the same rejection:
+
+```
+./trkqual_train.py configs/v3.0.yaml --outdir out/v2.0_on_v3.0 \
+    --model ANN1=../../ArtAnalysis/TrkDiag/data/TrkQual_ANN1_v2.0.onnx \
+    --model BDT1=../../ArtAnalysis/TrkDiag/data/TrkQual_BDT1_v2.0.ubj
+```
+
+The ```*plots.root``` files are then named after the model files. Every ```summary.json``` records the path and SHA-256 of each model file it trained or evaluated.
+
+### Checking art's Scores Against the Training
+Before new model files go into ArtAnalysis, check that the ```TrackQuality``` module gives the training's scores. It builds the features from the ```KalSeed``` in C++ and runs the models with ONNXRuntime and XGBoost's C API, while the training builds them from EventNtuple branches in python. ```trkqual_check_art.py``` compares the two, track by track. It does not run art itself: you first make EventNtuples with the new models in art, as below, and the script reads the scores art wrote into them. A few files are enough: nothing needs to run on the grid.
+
+First make the EventNtuples. Put the new model files where ```MU2E_SEARCH_PATH``` finds them, and add their scores to the EventNtuple as named branches (```check_v3.0.fcl```):
+
+```
+#include "EventNtuple/fcl/from_mcs-mockdata.fcl"
+
+# the models under test, found through MU2E_SEARCH_PATH
+physics.producers.TrkQualNew : @local::TrkQualAll
+physics.producers.TrkQualNew.onnxFilename : "ArtAnalysis/TrkDiag/data/TrkQual_ANN1_v3.0.onnx"
+physics.producers.TrkQualNew.xgbFilename : "ArtAnalysis/TrkDiag/data/TrkQual_BDT1_v3.0.ubj"
+physics.EventNtuplePath : [ @sequence::EventNtuple.Path, TrkQualNew ]
+
+physics.analyzers.EventNtuple.trk.fits[0].trkQualLeaves : [
+  { leafname : "_ann_v3_0" inputTag : "TrkQualNew:ANN" modelVersion : "TrkQual_ANN1_v3" },
+  { leafname : "_bdt_v3_0" inputTag : "TrkQualNew:BDT" modelVersion : "TrkQual_BDT1_v3" }
+]
+physics.analyzers.EventNtuple.trk.fillHits : false
+```
+
+and run it, in a new shell, on a few files of the mock dataset's ```mcs``` parent (they must be on disk, or prestaged):
+
+```
+mu2einit
+muse setup AnalysisMDC2025
+mkdir -p overlay/ArtAnalysis/TrkDiag/data
+cp out/v3.0/model/TrkQual_*_v3.0.* overlay/ArtAnalysis/TrkDiag/data/
+export MU2E_SEARCH_PATH=$PWD/overlay:$MU2E_SEARCH_PATH
+export OMP_NUM_THREADS=1   # XGBoost otherwise spins a thread per core
+setup mu2efiletools
+for f in $(mu2eDatasetFileList mcs.mu2e.ensembleMDS3cMix1BB.MDC2025au_best_v1_1.art | head -4); do
+  mu2e -c check_v3.0.fcl -s $f -T nts_$(basename $f .art).root
+done
+ls $PWD/nts_*.root > nts.list
+```
+
+(a file of ~10,000 events takes about 4 minutes). Then, back in the TrkQual python environment:
+
+```
+./trkqual_check_art.py configs/v3.0.yaml --ntuples nts.list \
+    --leaf trkqual_ann_v3_0=out/v3.0/model/TrkQual_ANN1_v3.0.onnx \
+    --leaf trkqual_bdt_v3_0=out/v3.0/model/TrkQual_BDT1_v3.0.ubj \
+    --summary out/v3.0/summary.json --workdir out/v3.0/check_art
+```
+
+It compares art's score with the python score of the same model file:
+
+* on every track, with the features built as the module builds them, and
+* on the tracks the training selects (```scripts/TrkQualTree.C``` run on the new EventNtuples), with the features built as the training builds them.
+
+For each model with a trkqual cut, it also compares the high-quality efficiency at the cut. The cut comes from ```--cut BRANCH=VALUE```, or from a ```summary.json``` given with ```--summary``` (repeatable). The summary must record the same model file, matched by its SHA-256, so a copy of the file is found too. The script writes ```check_art.json```, and exits non-zero if any track's scores differ. Any ```--leaf``` can be checked this way, including the models already in ArtAnalysis.
+
+To compare versions, add each version's models to the fcl as more named branches: one ```TrkQualAll``` producer per version, as in ```EventNtuple/fcl/from_mcs-mixed_trkQualCompare.fcl```. Then give each branch its own ```--leaf```, and add ```--plots```. For v2.0 against v3.0, with the cuts of both at 99% rejection on the v3.0 training sample (```out/v2.0_on_v3.0``` above):
+
+```
+./trkqual_check_art.py configs/v3.0.yaml --ntuples nts.list \
+    --leaf trkqual_ann_v2_0=../../ArtAnalysis/TrkDiag/data/TrkQual_ANN1_v2.0.onnx \
+    --leaf trkqual_bdt_v2_0=../../ArtAnalysis/TrkDiag/data/TrkQual_BDT1_v2.0.ubj \
+    --leaf trkqual_ann_v3_0=out/v3.0/model/TrkQual_ANN1_v3.0.onnx \
+    --leaf trkqual_bdt_v3_0=out/v3.0/model/TrkQual_BDT1_v3.0.ubj \
+    --summary out/v3.0/summary.json --summary out/v2.0_on_v3.0/summary.json \
+    --workdir out/v3.0/compare --plots out/v3.0/compare/plots --title "ensembleMDS3cMix1BB.MDC2025au_best_v1_1"
+```
+
+The plots use art's scores on the tracks the training selects. Each kind of model (```.onnx```, ```.ubj```) gets its own panel:
+
+* score distributions,
+* ROC curves,
+* the efficiency against momentum and the momentum resolution of the tracks passing each cut, and
+* per-track scatter plots of the models of each kind.
+
+#### Timing the Models
+Add ```--timing``` to time each ```--leaf``` model on the same tracks, in python and in C++. Run it with ```export OMP_NUM_THREADS=1``` in the python shell too, or python's XGBoost and numpy use every core. The C++ side is ```scripts/trkqual_timing.cc```: it scores the tracks one per call with the calls ```TrackQuality_module.cc``` makes (ONNXRuntime with default session options, the XGBoost C API with nthread 1). The script builds it against the ONNXRuntime and XGBoost of the Musing art uses (```--timing-musing```, default ```AnalysisMDC2025```) in a clean environment, so it needs ```/cvmfs```, and checks that its scores match python's. ```check_art.json``` gets a ```timing``` block: for each model, the time per track in C++, in python one track per call, and in python with all tracks in one call, wall clock and CPU, plus the host and CPU. The C++ time covers the model only; the module also builds the features from the ```KalSeed```.
+
+On 6,443 tracks of ```ensembleMDS3cMix1BB``` (v3.0 models, one core of a Xeon Silver 4214R), in microseconds per track:
+
+| model | C++, one track per call (as in art) | python, one track per call | python, all tracks in one call |
+|---|---|---|---|
+| ANN1 v3.0 | 5.8 | 278 | 35 |
+| BDT1 v3.0 | 125 | 298 | 2.7 |
+
+In art the ANN is about 20 times faster than the BDT. In python the BDT is faster when it scores many tracks in one call, as the notebook does. The trees themselves take under 3 microseconds per track (python, all tracks in one call), so most of the BDT's 125 in art is XGBoost's cost per call: a ```DMatrix``` made and freed for every track. Python runs the ANN with ONNX's reference evaluator, which is written in python, so its python time says little about the network itself.
+
+### Training a Model in the Notebook
 For training, you need to ssh into a mu2egpvm machine with a port forwarded, and setup the correct python environment:
 
 ```
